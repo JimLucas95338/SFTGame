@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Sun, Cloud, Wind, Thermometer, Droplet, Activity, Leaf, MessageSquare } from 'lucide-react';
 
-export default function SmartFarmGamePreview() {
+export default function SmartFarmGame() {
   const CROPS = {
     CORN: { icon: '🌽', growthTime: 3, value: 15 },
     WHEAT: { icon: '🌾', growthTime: 2, value: 10 },
@@ -24,7 +24,9 @@ export default function SmartFarmGamePreview() {
   const [selectedCrop, setSelectedCrop] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [showAdvisor, setShowAdvisor] = useState(false);
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([
+    { role: 'assistant', content: "I'm your farm advisor! How can I help?" }
+  ]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
@@ -152,144 +154,162 @@ export default function SmartFarmGamePreview() {
 
   const getAdvisorResponse = async (message) => {
     setIsTyping(true);
-    const gameContext = `
-      Current farm state:
-      - Day: ${gameState.day}
-      - Weather: ${gameState.weather}
-      - Temperature: ${gameState.temperature}°F
-      - Moisture: ${gameState.moisture}%
-      - Money: $${gameState.money}
-      - Sensors: ${gameState.sensors.length}
-      - Crops planted: ${grid.flat().filter(cell => cell !== null).length}
-    `;
+    
+    const gameContext = {
+      currentState: {
+        day: gameState.day,
+        weather: gameState.weather,
+        temperature: gameState.temperature,
+        moisture: gameState.moisture,
+        money: gameState.money,
+        sensorCount: gameState.sensors.length,
+        cropsPlanted: grid.flat().filter(cell => cell !== null).length,
+      }
+    };
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    let response = "I'm your farm advisor! ";
+    // Mock advisor response based on context
+    let response = "I'm analyzing your farm... ";
     if (message.toLowerCase().includes('weather')) {
       if (gameState.temperature > 90) {
-        response += "The temperature is quite high. Consider adding extra irrigation to protect your crops.";
+        response += "The temperature is quite high. Consider adding extra irrigation.";
       } else if (gameState.weather === 'rainy') {
         response += "The rain will help your crops, but monitor for over-saturation.";
       }
     } else if (message.toLowerCase().includes('crop') || message.toLowerCase().includes('plant')) {
-      response += "For best results, diversify your crops and monitor soil moisture levels with sensors.";
+      response += "For best results, diversify your crops and monitor soil moisture levels.";
     } else if (message.toLowerCase().includes('money') || message.toLowerCase().includes('profit')) {
-      response += `You currently have $${gameState.money}. Consider investing in sensors to optimize crop yields.`;
+      response += `You currently have $${gameState.money}. Consider investing in sensors.`;
+    } else {
+      response += "How can I help you optimize your farm's performance?";
     }
 
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     setMessages(prev => [...prev, 
       { role: 'user', content: message },
       { role: 'assistant', content: response }
     ]);
+    
     setIsTyping(false);
   };
 
   return (
-    <div className="p-4 max-w-4xl mx-auto relative min-h-screen">
-      <div className="mb-6 flex justify-between items-center bg-green-100 p-4 rounded-lg">
-        <div>
-          <div className="flex items-center gap-2">
-            <Home className="text-green-800" size={24} />
-            <h2 className="text-2xl font-bold text-green-800">Farm Simulator</h2>
+    <div className="p-6 max-w-4xl mx-auto bg-gray-50 min-h-screen">
+      {/* Header Section */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Farm Simulator</h1>
+            <p className="text-lg text-gray-600">Day: {gameState.day}</p>
+            <p className="text-lg text-gray-600">Money: ${gameState.money}</p>
           </div>
-          <p className="text-green-600">Day: {gameState.day}</p>
-          <p className="text-green-600">Money: ${gameState.money}</p>
-        </div>
-        <div className="flex gap-4 items-center">
-          {getWeatherIcon(gameState.weather)}
-          <div className="flex items-center gap-1">
-            <Thermometer className="text-red-500" size={24} />
-            <span className="text-lg">{gameState.temperature}°F</span>
+          <div className="flex items-center gap-4">
+            {getWeatherIcon(gameState.weather)}
+            <div className="flex items-center gap-2">
+              <Thermometer className="text-red-500" />
+              <span className="text-lg">{gameState.temperature}°F</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="font-bold mb-2">Tools</h3>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => addSensor('temperature')}
-              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 flex items-center gap-1"
-            >
-              <Thermometer size={16} />
-              Add Temperature Sensor ($100)
-            </button>
-            <button
-              onClick={() => addSensor('moisture')}
-              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 flex items-center gap-1"
-            >
-              <Droplet size={16} />
-              Add Moisture Sensor ($100)
-            </button>
-          </div>
+      {/* Tools Section */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Tools</h2>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => addSensor('temperature')}
+            className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            <Thermometer size={18} />
+            Add Temperature Sensor ($100)
+          </button>
+          <button
+            onClick={() => addSensor('moisture')}
+            className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            <Droplet size={18} />
+            Add Moisture Sensor ($100)
+          </button>
         </div>
+      </div>
 
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="font-bold mb-2">Plant Crops ($50)</h3>
-          <div className="flex gap-2">
-            {Object.keys(CROPS).map(crop => (
-              <button
-                key={crop}
-                onClick={() => setSelectedCrop(crop)}
-                className={`px-3 py-1 rounded flex items-center gap-1 ${
-                  selectedCrop === crop 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-green-100 hover:bg-green-200'
+      {/* Plant Crops Section */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Plant Crops ($50)</h2>
+        <div className="flex gap-3">
+          {Object.keys(CROPS).map(crop => (
+            <button
+              key={crop}
+              onClick={() => setSelectedCrop(crop)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                selectedCrop === crop 
+                  ? 'bg-green-500 text-white'
+                  : 'bg-green-100 text-green-800 hover:bg-green-200'
+              }`}
+            >
+              <Leaf size={18} />
+              {crop}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Farm Grid */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="grid grid-cols-6 gap-2">
+          {grid.map((row, i) => 
+            row.map((cell, j) => (
+              <div
+                key={`${i}-${j}`}
+                onClick={() => cell?.ready ? harvestCrop(i, j) : plantCrop(i, j)}
+                className={`aspect-square rounded-lg flex items-center justify-center text-2xl cursor-pointer transition-colors ${
+                  cell 
+                    ? cell.ready 
+                      ? 'bg-yellow-200 hover:bg-yellow-300'
+                      : 'bg-green-200 hover:bg-green-300'
+                    : 'bg-gray-100 hover:bg-gray-200'
                 }`}
               >
-                <Leaf size={16} />
-                {crop}
-              </button>
-            ))}
-          </div>
+                {cell && (
+                  <div className="relative">
+                    {CROPS[cell.type].icon}
+                    {cell.ready && (
+                      <span className="absolute -top-2 -right-2 text-sm">✨</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-6 gap-1 mb-6">
-        {grid.map((row, i) => 
-          row.map((cell, j) => (
-            <div
-              key={`${i}-${j}`}
-              className={`aspect-square ${
-                cell ? 'bg-green-300' : 'bg-green-100'
-              } hover:bg-green-200 cursor-pointer border border-green-300 flex items-center justify-center text-2xl`}
-              onClick={() => cell?.ready ? harvestCrop(i, j) : plantCrop(i, j)}
-            >
-              {cell && (
-                <div className="relative">
-                  {CROPS[cell.type].icon}
-                  {cell.ready && <span className="absolute -top-2 -right-2 text-sm">✨</span>}
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
+      {/* Controls */}
       <div className="flex justify-between">
         <button
           onClick={advanceDay}
-          className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex items-center gap-2"
+          className="flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition-colors"
         >
-          <Activity size={18} />
+          <Activity size={20} />
           Next Day
         </button>
       </div>
 
+      {/* Farm Advisor Button */}
       <button
         onClick={() => setShowAdvisor(true)}
-        className="fixed bottom-4 right-4 bg-green-500 text-white p-3 rounded-full shadow-lg hover:bg-green-600 z-40"
+        className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition-colors"
       >
         <MessageSquare size={24} />
       </button>
 
+      {/* Advisor Modal */}
       {showAdvisor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-96 max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-md">
             <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="font-bold">Farm Advisor</h3>
+              <h3 className="text-xl font-bold">Farm Advisor</h3>
               <button
                 onClick={() => setShowAdvisor(false)}
                 className="text-gray-500 hover:text-gray-700"
@@ -298,7 +318,7 @@ export default function SmartFarmGamePreview() {
               </button>
             </div>
             
-            <div className="flex-1 overflow-auto p-4 space-y-4">
+            <div className="h-96 overflow-y-auto p-4 space-y-4">
               {messages.map((msg, index) => (
                 <div
                   key={index}
@@ -308,7 +328,7 @@ export default function SmartFarmGamePreview() {
                     className={`max-w-[80%] rounded-lg p-3 ${
                       msg.role === 'user'
                         ? 'bg-green-500 text-white'
-                        : 'bg-gray-100 text-gray-800'
+                        : 'bg-gray-100'
                     }`}
                   >
                     {msg.content}
@@ -317,7 +337,7 @@ export default function SmartFarmGamePreview() {
               ))}
               {isTyping && (
                 <div className="flex justify-start">
-                  <div className="bg-gray-100 text-gray-800 rounded-lg p-3">
+                  <div className="bg-gray-100 rounded-lg p-3">
                     Thinking...
                   </div>
                 </div>
@@ -340,7 +360,7 @@ export default function SmartFarmGamePreview() {
                   value={currentMessage}
                   onChange={e => setCurrentMessage(e.target.value)}
                   placeholder="Ask for farming advice..."
-                  className="flex-1 border rounded-lg px-3 py-2"
+                  className="flex-1 border rounded-lg px-4 py-2"
                 />
                 <button
                   type="submit"
@@ -354,46 +374,17 @@ export default function SmartFarmGamePreview() {
         </div>
       )}
 
-      <div className="fixed top-4 right-4 flex flex-col gap-2 z-50 pointer-events-none">
+      {/* Notifications */}
+      <div className="fixed top-6 right-6 flex flex-col gap-2 z-50">
         {notifications.map(notification => (
           <div
             key={notification.id}
-            className="bg-white shadow-lg rounded-lg p-3 opacity-90 hover:opacity-100 transition-opacity pointer-events-auto"
-            style={{
-              animation: `
-                slideIn 0.2s ease-out,
-                slideOut 0.2s ease-in 2.8s
-              `,
-            }}
+            className="bg-white shadow-lg rounded-lg p-4 animate-slideIn"
           >
             {notification.message}
           </div>
         ))}
       </div>
-
-      <style jsx>{`
-        @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 0.9;
-          }
-        }
-
-        @keyframes slideOut {
-          from {
-            transform: translateX(0);
-            opacity: 0.9;
-          }
-          to {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-        }
-      `}</style>
     </div>
   );
 }
