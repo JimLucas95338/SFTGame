@@ -3,10 +3,31 @@ import { Home, Sun, Cloud, Wind, Thermometer, Droplet, Activity, Leaf, MessageSq
 
 export default function SmartFarmGame() {
   const CROPS = {
-    CORN: { icon: '🌽', growthTime: 3, value: 15 },
-    WHEAT: { icon: '🌾', growthTime: 2, value: 10 },
-    TOMATO: { icon: '🍅', growthTime: 4, value: 20 },
-  };
+  CORN: { 
+    icon: '🌽', 
+    growthTime: 3, 
+    value: 100,     // Increased from 15
+    cost: 25,      // New: separate planting cost
+    waterNeeds: 60, // New: optimal moisture level
+    tempRange: { min: 60, max: 85 } // New: optimal temperature range
+  },
+  WHEAT: { 
+    icon: '🌾', 
+    growthTime: 2, 
+    value: 75,
+    cost: 15,
+    waterNeeds: 40,
+    tempRange: { min: 55, max: 75 }
+  },
+  TOMATO: { 
+    icon: '🍅', 
+    growthTime: 4, 
+    value: 150,
+    cost: 35,
+    waterNeeds: 75,
+    tempRange: { min: 65, max: 90 }
+  }
+};
 
   const [gameState, setGameState] = useState({
     day: 1,
