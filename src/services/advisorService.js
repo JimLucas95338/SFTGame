@@ -1,35 +1,42 @@
-export const getAdvice = (gameState, message, grid) => {
-  const lowerMessage = message.toLowerCase();
-  const context = analyzeFarmState(gameState, grid);
+import { CROPS } from '../utils/gameUtils';
+
+function analyzeCropSuitability(weather, temperature, moisture) {
+  const suitability = {};
   
-  // Plant advice
-  if (lowerMessage.includes('plant')) {
-    return getPlantingAdvice(context);
-  }
+  Object.entries(CROPS).forEach(([cropName, crop]) => {
+    let score = 1.0;
+    
+    // Temperature suitability
+    if (temperature >= crop.tempRange.min && temperature <= crop.tempRange.max) {
+      score *= 1.2; // Ideal temperature
+    } else if (temperature < crop.tempRange.min) {
+      score *= 0.5; // Too cold
+    } else {
+      score *= 0.7; // Too hot
+    }
+    
+    // Moisture suitability
+    if (Math.abs(moisture - crop.waterNeeds) <= 10) {
+      score *= 1.2; // Ideal moisture
+    } else if (Math.abs(moisture - crop.waterNeeds) <= 20) {
+      score *= 0.8; // Suboptimal moisture
+    } else {
+      score *= 0.5; // Poor moisture
+    }
+    
+    // Weather effects
+    if (weather === 'rainy' && crop.waterNeeds < 50) {
+      score *= 0.8; // Rain affects drought-resistant crops negatively
+    }
+    if (weather === 'windy' && crop.waterNeeds > 70) {
+      score *= 0.9; // Wind affects water-loving crops negatively
+    }
+    
+    suitability[cropName] = score;
+  });
   
-  // Weather advice
-  if (lowerMessage.includes('weather')) {
-    return getWeatherAdvice(context);
-  }
-  
-  // Sensor advice
-  if (lowerMessage.includes('sensor') || lowerMessage.includes('upgrade')) {
-    return getSensorAdvice(context);
-  }
-  
-  // Harvest advice
-  if (lowerMessage.includes('harvest') || lowerMessage.includes('ready')) {
-    return getHarvestAdvice(context);
-  }
-  
-  // Money advice
-  if (lowerMessage.includes('money') || lowerMessage.includes('loan')) {
-    return getFinancialAdvice(context);
-  }
-  
-  // General advice
-  return getGeneralAdvice(context);
-};
+  return suitability;
+}
 
 function analyzeFarmState(gameState, grid) {
   const crops = grid.flat().filter(cell => cell !== null);
@@ -174,3 +181,36 @@ function getGeneralAdvice(context) {
   
   return advice;
 }
+
+export const getAdvice = (gameState, message, grid) => {
+  const lowerMessage = message.toLowerCase();
+  const context = analyzeFarmState(gameState, grid);
+  
+  // Plant advice
+  if (lowerMessage.includes('plant')) {
+    return getPlantingAdvice(context);
+  }
+  
+  // Weather advice
+  if (lowerMessage.includes('weather')) {
+    return getWeatherAdvice(context);
+  }
+  
+  // Sensor advice
+  if (lowerMessage.includes('sensor') || lowerMessage.includes('upgrade')) {
+    return getSensorAdvice(context);
+  }
+  
+  // Harvest advice
+  if (lowerMessage.includes('harvest') || lowerMessage.includes('ready')) {
+    return getHarvestAdvice(context);
+  }
+  
+  // Money advice
+  if (lowerMessage.includes('money') || lowerMessage.includes('loan')) {
+    return getFinancialAdvice(context);
+  }
+  
+  // General advice
+  return getGeneralAdvice(context);
+};
