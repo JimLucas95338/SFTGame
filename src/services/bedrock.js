@@ -10,45 +10,22 @@ const bedrockClient = new BedrockRuntimeClient({
 
 export async function getFarmingAdvice(gameState, message) {
   try {
-    // Calculate which crops would thrive in current conditions
-    const suitableCrops = {
-      CORN: gameState.temperature >= 60 && gameState.temperature <= 85 && gameState.moisture >= 55,
-      WHEAT: gameState.temperature >= 55 && gameState.temperature <= 75 && gameState.moisture >= 35,
-      TOMATO: gameState.temperature >= 65 && gameState.temperature <= 90 && gameState.moisture >= 70
-    };
-
-    const recommendations = Object.entries(suitableCrops)
-      .filter(([, suitable]) => suitable)
-      .map(([crop]) => crop);
-
     const gameContext = `
-      Current Farm Status:
-      - Day: ${gameState.day}
+      You are a friendly AI farm advisor who enjoys chatting with farmers. While you know all about farming and current conditions:
       - Weather: ${gameState.weather}
       - Temperature: ${gameState.temperature}°F
       - Moisture: ${gameState.moisture}%
       - Available Money: $${gameState.money}
+      - Current Day: ${gameState.day}
 
-      Currently Suitable Crops: ${recommendations.join(', ') || 'Conditions are challenging for all crops'}
+      Feel free to chat naturally about any topic, share stories, or give advice. You can be witty and personable while still being helpful.
 
-      Crop Requirements:
-      - Corn ($25): Needs 60-85°F and 60% moisture
-      - Wheat ($15): Needs 55-75°F and 40% moisture
-      - Tomato ($35): Needs 65-90°F and 75% moisture
-
-      Player question: "${message}"
+      Player message: "${message}"
     `;
 
-    const prompt = `\n\nHuman: You are an experienced farming advisor in a farming simulation game. Provide specific, practical advice based on current conditions. Your responses should be:
-    - Specific to the player's question
-    - Consider current weather conditions and funds
-    - Include clear recommendations
-    - Explain the reasoning behind your advice
-    - Be brief but informative
-    
-    ${gameContext}
+    const prompt = `\n\nHuman: ${gameContext}
 
-    Assistant: Let me analyze your farm's current conditions and provide targeted advice.`;
+    Assistant: Let me respond naturally as a friendly farm advisor.`;
 
     const command = new InvokeModelCommand({
       modelId: "anthropic.claude-v2",
@@ -56,8 +33,8 @@ export async function getFarmingAdvice(gameState, message) {
       accept: "application/json",
       body: JSON.stringify({
         prompt: prompt,
-        max_tokens_to_sample: 300,
-        temperature: 0.8,  // Increased for more response variation
+        max_tokens_to_sample: 500,  // Increased for longer responses
+        temperature: 0.9,  // Higher temperature for more creative responses
         top_k: 250,
         top_p: 0.999,
         stop_sequences: ["\n\nHuman:"]
@@ -66,18 +43,10 @@ export async function getFarmingAdvice(gameState, message) {
 
     const response = await bedrockClient.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    
-    // Add some randomization to the fallback response if AI fails
-    const fallbackResponses = [
-      `With ${gameState.weather} weather at ${gameState.temperature}°F, ${recommendations.length > 0 ? recommendations[0] : 'wheat'} might be a good choice. What's your farming strategy?`,
-      `Current conditions are good for ${recommendations.join(' or ')}. Would you like specific planting advice?`,
-      `I recommend focusing on ${recommendations[0]} given the current weather. How can I help with your farming decisions?`
-    ];
-
-    return responseBody.completion || fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    return responseBody.completion;
 
   } catch (error) {
-    console.error('Error getting AI farming advice:', error);
-    return `With ${gameState.temperature}°F and ${gameState.moisture}% moisture, consider focusing on weather-appropriate crops. What would you like to know about specific crops?`;
+    console.error('Error getting AI response:', error);
+    return "I seem to be having trouble connecting at the moment. Want to try asking me something else?";
   }
 }
