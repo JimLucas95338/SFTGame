@@ -10,56 +10,55 @@ const bedrockClient = new BedrockRuntimeClient({
 
 export async function getFarmingAdvice(gameState, message) {
   try {
-    const gameContext = `
-      You are a friendly AI farm advisor who enjoys chatting with farmers. While you know all about farming and current conditions:
+    const gameContext = `You are a friendly AI farm advisor. Here are the current farming conditions:
       - Weather: ${gameState.weather}
       - Temperature: ${gameState.temperature}°F
       - Moisture: ${gameState.moisture}%
       - Available Money: $${gameState.money}
       - Current Day: ${gameState.day}
-      Player message: "${message}"
-    `;
 
-    const prompt = `\n\nHuman: ${gameContext}
-    Assistant: Let me respond naturally as a friendly farm advisor.`;
+      The player asks: "${message}"
+
+      Provide brief, practical farming advice based on these conditions.`;
 
     const command = new InvokeModelCommand({
-      modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0", // Updated to correct model ID
+      modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
       contentType: "application/json",
       accept: "application/json",
       body: JSON.stringify({
-        anthropic_version: "bedrock-2023-05-31",
+        prompt: gameContext,
         max_tokens: 500,
-        messages: [
-          {
-            role: "user",
-            content: gameContext
-          }
-        ],
-        temperature: 0.7
+        temperature: 0.7,
+        top_p: 0.999,
+        stop_sequences: ["\n\nHuman:"]
       })
     });
 
-    console.log('Making request to Bedrock with:', {
+    console.log('Making Bedrock request...', {
       modelId: command.input.modelId,
       region: bedrockClient.config.region
     });
 
     const response = await bedrockClient.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    console.log('Response from Bedrock:', responseBody);
+    console.log('Bedrock response:', responseBody);
 
-    return responseBody.completion || responseBody.content;
+    // Ensure we return a string
+    if (typeof responseBody.completion === 'string') {
+      return responseBody.completion;
+    }
+    
+    // Fallback response if we don't get what we expect
+    return "I understand you're asking about farming. What specifically would you like to know about your crops or conditions?";
+
   } catch (error) {
-    console.error('Detailed error:', {
+    console.error('Bedrock error:', {
       name: error.name,
       message: error.message,
       code: error.code,
-      requestId: error.$metadata?.requestId,
-      region: bedrockClient.config.region,
-      status: error.status
+      requestId: error.$metadata?.requestId
     });
     
-    return "I'm having trouble connecting. Would you like some general farming advice instead?";
+    return "I'm having trouble connecting right now. Ask me about the current weather or crop conditions instead.";
   }
 }
