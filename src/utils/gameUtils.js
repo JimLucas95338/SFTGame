@@ -29,31 +29,31 @@ export const CROPS = {
 };
 
 export const calculateYield = (crop, weather, temp, moisture, tempBonus = 1, moistureBonus = 1) => {
-  let yield = 1.0;
+  let yieldValue = 1.0;
 
   // Temperature effects
   if (temp < crop.tempRange.min) {
-    yield *= 0.5 * tempBonus; // Too cold, but sensors help
+    yieldValue *= 0.5 * tempBonus;
   } else if (temp > crop.tempRange.max) {
-    yield *= 0.7 * tempBonus; // Too hot, but sensors help
+    yieldValue *= 0.7 * tempBonus;
   } else {
-    yield *= 1.2 * tempBonus; // Perfect temperature + sensor bonus
+    yieldValue *= 1.2 * tempBonus;
   }
 
   // Weather and moisture effects
   if (weather === 'rainy' && moisture > crop.waterNeeds) {
-    yield *= 0.8 * moistureBonus; // Over-watered, but sensors help
+    yieldValue *= 0.8 * moistureBonus;
   } else if (weather === 'sunny' && moisture < crop.waterNeeds) {
-    yield *= 0.7 * moistureBonus; // Under-watered, but sensors help
+    yieldValue *= 0.7 * moistureBonus;
   } else {
-    yield *= 1.1 * moistureBonus; // Perfect conditions + sensor bonus
+    yieldValue *= 1.1 * moistureBonus;
   }
 
-  return yield;
+  return yieldValue;
 };
 
 export const calculateLoanInterest = (loanAmount) => {
-  return Math.round(loanAmount * 0.01); // 1% daily interest
+  return Math.round(loanAmount * 0.01);
 };
 
 export const calculateMaintenanceCost = (sensorCount, difficulty) => {
