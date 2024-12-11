@@ -22,7 +22,7 @@ export async function getFarmingAdvice(gameState, message) {
       Provide brief, practical farming advice based on these conditions.`;
 
     const command = new InvokeModelCommand({
-      modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+      modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
       contentType: "application/json",
       accept: "application/json",
       body: JSON.stringify({
