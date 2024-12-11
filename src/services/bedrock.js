@@ -1,6 +1,5 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
-// Create Bedrock client using environment variables
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.REACT_APP_AWS_REGION,
   credentials: {
@@ -11,27 +10,34 @@ const bedrockClient = new BedrockRuntimeClient({
 
 export async function getFarmingAdvice(gameState, message) {
   try {
-    // Build context for the AI
+    // Build rich context for the AI
     const gameContext = `
-      Current farm state:
-      - Weather: ${gameState.weather}
-      - Temperature: ${gameState.temperature}°F
-      - Moisture: ${gameState.moisture}%
-      - Money: $${gameState.money}
+      Current Farm State:
       - Day: ${gameState.day}
-      
+      - Weather: ${gameState.weather} with ${gameState.temperature}°F
+      - Moisture Level: ${gameState.moisture}%
+      - Available Funds: $${gameState.money}
+
+      Crop Information:
+      - Corn: Needs 60-85°F, 60% moisture, $25 to plant
+      - Wheat: Needs 55-75°F, 40% moisture, $15 to plant
+      - Tomato: Needs 65-90°F, 75% moisture, $35 to plant
+
       Player question: "${message}"
     `;
 
-    const prompt = `\n\nHuman: You are an AI farming advisor in a farming simulation game. Provide specific farming advice based on current conditions.
-
+    const prompt = `\n\nHuman: You are an AI farming advisor in a farming simulation game. Be helpful and specific, considering:
+    - Current weather and temperature conditions
+    - Crop requirements and costs
+    - Player's available funds
+    - Long-term planning and risk management
+    
+    Consider yourself a seasoned farmer with deep practical knowledge. Use a friendly, conversational tone but stay focused on giving actionable advice.
+    
     ${gameContext}
 
-    Please give detailed recommendations about what actions to take.
+    Assistant: Let me provide specific farming advice based on your current situation.`;
 
-    Assistant: Let me analyze your farm's conditions and provide strategic advice.`;
-
-    // Send request to Bedrock
     const command = new InvokeModelCommand({
       modelId: "anthropic.claude-v2",
       contentType: "application/json",
@@ -52,7 +58,6 @@ export async function getFarmingAdvice(gameState, message) {
 
   } catch (error) {
     console.error('Error getting AI farming advice:', error);
-    // Fallback to basic advice if AI fails
-    return `Based on current conditions (${gameState.weather}, ${gameState.temperature}°F), focus on maintaining crop health and monitoring moisture levels.`;
+    return `Based on current conditions (${gameState.weather}, ${gameState.temperature}°F), I recommend focusing on crop health and resource management. Let me know if you have specific questions about any crops or farming strategies.`;
   }
 }
