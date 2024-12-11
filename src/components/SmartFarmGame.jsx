@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sun, Cloud, Wind, Thermometer, Droplet, Activity, Leaf, MessageSquare, DollarSign } from 'lucide-react';
 import { getFarmingAdvice } from '../services/bedrock';
+import { analyzeFarmState, getAdvice } from '../services/advisorService';
 
 function SmartFarmGame() {
   // Game Constants
@@ -56,13 +57,16 @@ function SmartFarmGame() {
   const [showAdvisor, setShowAdvisor] = useState(false);
   const [showTutorial, setShowTutorial] = useState(true);
 
-  // Advisor States
+  // AI Advisor States
   const [messages, setMessages] = useState([
-  { 
-    role: 'assistant', 
-    content: "Welcome! I'm your farm advisor. What would you like to know about your farm?" 
-  }
-]);
+    { 
+      role: 'assistant', 
+      content: "Welcome! I'm your farm advisor. What would you like to know about your farm?" 
+    }
+  ]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentMessage, setCurrentMessage] = useState('');
 
   // Utility Functions
   const calculateYield = (crop, weather, temp, moisture, tempBonus = 1, moistureBonus = 1) => {
@@ -209,39 +213,43 @@ function SmartFarmGame() {
   };
 
   // AI Advisor Function
- const handleAdvisorMessage = async (message) => {
-  setIsTyping(true);
-  try {
-    // First get context-aware advice
-    const context = analyzeFarmState(gameState, grid);
-    const localAdvice = getAdvice(gameState, message, grid);
+  const handleAdvisorMessage = async (message = currentMessage) => {
+    if (!message.trim()) return;
     
-    // Then send to Bedrock for more sophisticated response
-    const bedrockResponse = await getFarmingAdvice(gameState, message);
-    
-    // Make sure we're storing strings, not objects
-    const finalResponse = typeof bedrockResponse === 'string' 
-      ? bedrockResponse 
-      : bedrockResponse?.content || bedrockResponse?.completion || localAdvice;
+    setIsTyping(true);
+    setIsLoading(true);
+    try {
+      // First get context-aware advice
+      const context = analyzeFarmState(gameState, grid);
+      const localAdvice = getAdvice(gameState, message, grid);
+      
+      // Then send to Bedrock for more sophisticated response
+      const bedrockResponse = await getFarmingAdvice(gameState, message);
+      
+      // Make sure we're storing strings, not objects
+      const finalResponse = typeof bedrockResponse === 'string' 
+        ? bedrockResponse 
+        : bedrockResponse?.content || bedrockResponse?.completion || localAdvice;
 
-    setMessages(prev => [...prev, 
-      { role: 'user', content: String(message) },
-      { role: 'assistant', content: String(finalResponse) }
-    ]);
-  } catch (error) {
-    console.error('Error getting advice:', error);
-    // Fallback to local advice if Bedrock fails
-    const fallbackAdvice = getAdvice(gameState, message, grid);
-    setMessages(prev => [...prev, 
-      { role: 'user', content: String(message) },
-      { role: 'assistant', content: String(fallbackAdvice) }
-    ]);
-  }
-  setIsTyping(false);
-  setCurrentMessage('');
-};
-
-  return (
+      setMessages(prev => [...prev, 
+        { role: 'user', content: String(message) },
+        { role: 'assistant', content: String(finalResponse) }
+      ]);
+    } catch (error) {
+      console.error('Error getting advice:', error);
+      // Fallback to local advice if Bedrock fails
+      const fallbackAdvice = getAdvice(gameState, message, grid);
+      setMessages(prev => [...prev, 
+        { role: 'user', content: String(message) },
+        { role: 'assistant', content: String(fallbackAdvice) }
+      ]);
+    } finally {
+      setIsTyping(false);
+      setIsLoading(false);
+      setCurrentMessage('');
+    }
+  };
+return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-green-100 p-6">
       {/* Header */}
       <div className="bg-white/80 backdrop-blur rounded-lg shadow-lg p-6 mb-6">
@@ -395,7 +403,7 @@ function SmartFarmGame() {
         ))}
       </div>
 
-      {/* Tutorial Modal */}
+      {/* Modals */}
       {showTutorial && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
@@ -446,7 +454,6 @@ function SmartFarmGame() {
               </button>
             </div>
 
-            {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto mb-4 space-y-4">
               {messages.map((msg, index) => (
                 <div
@@ -473,11 +480,12 @@ function SmartFarmGame() {
               )}
             </div>
 
-            {/* Input Form */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleAdvisorMessage();
+                if (currentMessage.trim()) {
+                  handleAdvisorMessage(currentMessage);
+                }
               }}
               className="flex gap-2"
             >
