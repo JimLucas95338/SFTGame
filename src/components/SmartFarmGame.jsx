@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Home, Sun, Cloud, Wind, Thermometer, Droplet, Activity, Leaf, MessageSquare, AlertCircle, DollarSign } from 'lucide-react';
-import { CROPS, calculateYield, calculateLoanInterest, calculateMaintenanceCost, getWeatherEffect, getAdvice } from '../utils/gameUtils';
+import { Home, Sun, Cloud, Wind, Thermometer, Droplet, Activity, Leaf, MessageSquare, DollarSign } from 'lucide-react';
+import { CROPS, calculateYield, calculateLoanInterest, calculateMaintenanceCost, getWeatherEffect } from '../utils/gameUtils';
+import { getAdvice } from '../services/advisorService';
 
 export default function SmartFarmGame() {
   const [gameState, setGameState] = useState({
@@ -23,7 +24,7 @@ export default function SmartFarmGame() {
   const [notifications, setNotifications] = useState([]);
   const [showAdvisor, setShowAdvisor] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Welcome! I'll help you manage your farm. Try planting different crops based on the weather conditions!" }
+    { role: 'assistant', content: "Welcome! I'm your farm advisor. What would you like to know about your farm?" }
   ]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -141,15 +142,15 @@ export default function SmartFarmGame() {
     simulateWeatherChange();
     growCrops();
 
-    // Check for bankruptcy
-    if (gameState.money < -1000) {
-      addNotification('🚨 Warning: High debt! Consider selling crops or taking a loan.', 'error');
-    }
-
     setGameState(prev => ({
       ...prev,
       day: prev.day + 1
     }));
+
+    // Check for bankruptcy
+    if (gameState.money < -1000) {
+      addNotification('🚨 Warning: High debt! Consider selling crops or taking a loan.', 'error');
+    }
   };
 
   const addSensor = (type) => {
@@ -236,17 +237,23 @@ export default function SmartFarmGame() {
     }
   };
 
-  const getAdvisorResponse = async (message) => {
+  const handleAdvisorMessage = async (message) => {
     setIsTyping(true);
-    
-    const advice = getAdvice(gameState, grid.flat().filter(cell => cell !== null));
-    
-    setMessages(prev => [...prev, 
-      { role: 'user', content: message },
-      { role: 'assistant', content: advice }
-    ]);
-    
+    try {
+      const advice = getAdvice(gameState, message, grid);
+      setMessages(prev => [...prev, 
+        { role: 'user', content: message },
+        { role: 'assistant', content: advice }
+      ]);
+    } catch (error) {
+      console.error('Error getting advice:', error);
+      setMessages(prev => [...prev, 
+        { role: 'user', content: message },
+        { role: 'assistant', content: "I'm having trouble analyzing the farm right now. Please try again." }
+      ]);
+    }
     setIsTyping(false);
+    setCurrentMessage('');
   };
 
   return (
@@ -360,52 +367,6 @@ export default function SmartFarmGame() {
         <MessageSquare size={24} />
       </button>
 
-      {/* Loan Button */}
-      {gameState.money < 100 && (
-        <button
-          onClick={getLoan}
-          className="fixed bottom-20 right-6 bg-yellow-500 text-white p-4 rounded-full shadow-lg hover:bg-yellow-600 transition-colors"
-        >
-          <DollarSign size={24} />
-        </button>
-      )}
-
-      {/* Pay Loan Button */}
-      {gameState.loans > 0 && (
-        <div className="fixed bottom-6 left-6 bg-white rounded-lg shadow-lg p-4">
-          <p className="text-sm mb-2">Outstanding Loan: ${gameState.loans}</p>
-          <button
-            onClick={() => payLoan(Math.min(gameState.money, gameState.loans))}
-            className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
-          >
-            Pay Loan
-          </button>
-        </div>
-      )}
-
-      {/* Tutorial Modal */}
-      {showTutorial && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-md p-6">
-            <h3 className="text-xl font-bold mb-4">Welcome to Farm Simulator!</h3>
-            <div className="space-y-2 mb-4">
-              <p>🌱 Plant crops according to weather conditions</p>
-              <p>📊 Use sensors to improve crop yields</p>
-              <p>💰 Manage your money and take loans if needed</p>
-              <p>🌡️ Monitor temperature and moisture levels</p>
-              <p>⏱️ Each crop has different growth times and needs</p>
-              <p>💸 Watch out for loan interest and maintenance costs!</p>
-            </div>
-            <button
-              onClick={() => setShowTutorial(false)}
-              className="w-full bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
-            >
-              Start Farming!
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Advisor Modal */}
       {showAdvisor && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -422,6 +383,7 @@ export default function SmartFarmGame() {
             
             <div className="h-96 overflow-y-auto p-4 space-y-4">
               {messages.map((msg, index) => (
+          {messages.map((msg, index) => (
                 <div
                   key={index}
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -451,8 +413,7 @@ export default function SmartFarmGame() {
                 onSubmit={e => {
                   e.preventDefault();
                   if (currentMessage.trim()) {
-                    getAdvisorResponse(currentMessage);
-                    setCurrentMessage('');
+                    handleAdvisorMessage(currentMessage);
                   }
                 }}
                 className="flex gap-2"
@@ -476,28 +437,49 @@ export default function SmartFarmGame() {
         </div>
       )}
 
-      {/* Stats Panel */}
-      <div className="fixed top-6 left-6 bg-white rounded-lg shadow-lg p-4">
-        <div className="space-y-2">
-          <p className="text-sm text-gray-600">Temperature Bonus: +{((gameState.tempBonus - 1) * 100).toFixed(0)}%</p>
-          <p className="text-sm text-gray-600">Moisture Bonus: +{((gameState.moistureBonus - 1) * 100).toFixed(0)}%</p>
-          {gameState.loans > 0 && (
-            <p className="text-sm text-red-600">Loans: ${gameState.loans}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Crop Info Modal */}
-      {selectedCrop && (
-        <div className="fixed bottom-20 left-6 bg-white rounded-lg shadow-lg p-4 max-w-xs">
-          <h4 className="font-bold">{selectedCrop}</h4>
-          <p className="text-sm text-gray-600">{CROPS[selectedCrop].description}</p>
-          <div className="mt-2 space-y-1 text-sm">
-            <p>Cost: ${CROPS[selectedCrop].cost}</p>
-            <p>Growth Time: {CROPS[selectedCrop].growthTime} days</p>
-            <p>Water Needs: {CROPS[selectedCrop].waterNeeds}%</p>
-            <p>Temp Range: {CROPS[selectedCrop].tempRange.min}°F - {CROPS[selectedCrop].tempRange.max}°F</p>
+      {/* Tutorial Modal */}
+      {showTutorial && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-md p-6">
+            <h3 className="text-xl font-bold mb-4">Welcome to Farm Simulator!</h3>
+            <div className="space-y-2 mb-4">
+              <p>🌱 Plant crops according to weather conditions</p>
+              <p>📊 Use sensors to improve crop yields</p>
+              <p>💰 Manage your money and take loans if needed</p>
+              <p>🌡️ Monitor temperature and moisture levels</p>
+              <p>⏱️ Each crop has different growth times and needs</p>
+              <p>💸 Watch out for loan interest and maintenance costs!</p>
+            </div>
+            <button
+              onClick={() => setShowTutorial(false)}
+              className="w-full bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+            >
+              Start Farming!
+            </button>
           </div>
+        </div>
+      )}
+
+      {/* Loan Button */}
+      {gameState.money < 100 && (
+        <button
+          onClick={getLoan}
+          className="fixed bottom-20 right-6 bg-yellow-500 text-white p-4 rounded-full shadow-lg hover:bg-yellow-600 transition-colors"
+        >
+          <DollarSign size={24} />
+        </button>
+      )}
+
+      {/* Pay Loan Button */}
+      {gameState.loans > 0 && (
+        <div className="fixed bottom-6 left-6 bg-white rounded-lg shadow-lg p-4">
+          <p className="text-sm mb-2">Outstanding Loan: ${gameState.loans}</p>
+          <button
+            onClick={() => payLoan(Math.min(gameState.money, gameState.loans))}
+            className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+          >
+            Pay Loan
+          </button>
         </div>
       )}
 
