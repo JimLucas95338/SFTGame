@@ -58,10 +58,11 @@ function SmartFarmGame() {
 
   // Advisor States
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Welcome! I'm your farm advisor. How can I help you today?" }
-  ]);
-  const [currentMessage, setCurrentMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  { 
+    role: 'assistant', 
+    content: "Welcome! I'm your farm advisor. What would you like to know about your farm?" 
+  }
+]);
 
   // Utility Functions
   const calculateYield = (crop, weather, temp, moisture, tempBonus = 1, moistureBonus = 1) => {
@@ -208,27 +209,37 @@ function SmartFarmGame() {
   };
 
   // AI Advisor Function
-  const handleAdvisorMessage = async () => {
-    if (!currentMessage.trim()) return;
+ const handleAdvisorMessage = async (message) => {
+  setIsTyping(true);
+  try {
+    // First get context-aware advice
+    const context = analyzeFarmState(gameState, grid);
+    const localAdvice = getAdvice(gameState, message, grid);
+    
+    // Then send to Bedrock for more sophisticated response
+    const bedrockResponse = await getFarmingAdvice(gameState, message);
+    
+    // Make sure we're storing strings, not objects
+    const finalResponse = typeof bedrockResponse === 'string' 
+      ? bedrockResponse 
+      : bedrockResponse?.content || bedrockResponse?.completion || localAdvice;
 
-    try {
-      setIsLoading(true);
-      setMessages(prev => [...prev, { role: 'user', content: currentMessage }]);
-      
-      const aiResponse = await getFarmingAdvice(gameState, currentMessage);
-      setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
-      
-      setCurrentMessage('');
-    } catch (error) {
-      console.error('Error getting advice:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: "I'm having trouble connecting. Please try again." 
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    setMessages(prev => [...prev, 
+      { role: 'user', content: String(message) },
+      { role: 'assistant', content: String(finalResponse) }
+    ]);
+  } catch (error) {
+    console.error('Error getting advice:', error);
+    // Fallback to local advice if Bedrock fails
+    const fallbackAdvice = getAdvice(gameState, message, grid);
+    setMessages(prev => [...prev, 
+      { role: 'user', content: String(message) },
+      { role: 'assistant', content: String(fallbackAdvice) }
+    ]);
+  }
+  setIsTyping(false);
+  setCurrentMessage('');
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-green-100 p-6">
