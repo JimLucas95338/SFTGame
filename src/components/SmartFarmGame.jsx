@@ -212,36 +212,63 @@ function SmartFarmGame() {
     }
   };
 
-  // AI Advisor Function
   const handleAdvisorMessage = async (message = currentMessage) => {
     if (!message.trim()) return;
     
     setIsTyping(true);
     setIsLoading(true);
     try {
-      // First get context-aware advice
-      const context = analyzeFarmState(gameState, grid);
-      const localAdvice = getAdvice(gameState, message, grid);
-      
-      // Then send to Bedrock for more sophisticated response
-      const bedrockResponse = await getFarmingAdvice(gameState, message);
-      
-      // Make sure we're storing strings, not objects
-      const finalResponse = typeof bedrockResponse === 'string' 
-        ? bedrockResponse 
-        : bedrockResponse?.content || bedrockResponse?.completion || localAdvice;
+      const context = {
+        weather: gameState.weather,
+        temperature: gameState.temperature,
+        moisture: gameState.moisture,
+        plantedCrops: grid.flat().filter(cell => cell !== null).length,
+        readyCrops: grid.flat().filter(cell => cell?.ready).length,
+        money: gameState.money,
+        question: message.toLowerCase()
+      };
 
-      setMessages(prev => [...prev, 
-        { role: 'user', content: String(message) },
-        { role: 'assistant', content: String(finalResponse) }
+      let response;
+      if (message.toLowerCase().includes('what') || message.toLowerCase().includes('which')) {
+        if (message.toLowerCase().includes('crop')) {
+          const suitableCrops = Object.entries(CROPS)
+            .filter(([, crop]) => 
+              gameState.temperature >= crop.tempRange.min && 
+              gameState.temperature <= crop.tempRange.max
+            )
+            .map(([name]) => name);
+          
+          response = `Given the current conditions (${gameState.weather}, ${gameState.temperature}°F), 
+            I recommend planting ${suitableCrops.join(' or ')}. You have $${gameState.money} available.`;
+        }
+      } else if (message.toLowerCase().includes('weather')) {
+        response = `Current weather is ${gameState.weather} at ${gameState.temperature}°F with ${gameState.moisture}% moisture. 
+          ${gameState.temperature > 85 ? 'Be careful of heat stress on crops.' : 
+            gameState.temperature < 55 ? 'Watch out for cold damage.' : 
+            'Temperature is ideal for most crops.'}`;
+      }
+
+      // If no specific response, get one from Bedrock
+      if (!response) {
+        response = await getFarmingAdvice(gameState, message);
+      }
+
+      setMessages(prev => [...prev,
+        { role: 'user', content: message },
+        { role: 'assistant', content: response }
       ]);
+
     } catch (error) {
-      console.error('Error getting advice:', error);
-      // Fallback to local advice if Bedrock fails
-      const fallbackAdvice = getAdvice(gameState, message, grid);
-      setMessages(prev => [...prev, 
-        { role: 'user', content: String(message) },
-        { role: 'assistant', content: String(fallbackAdvice) }
+      console.error('AI Error:', error);
+      const fallback = `Based on current conditions, ${
+        gameState.money < 100 ? 'you should focus on harvesting ready crops to earn money.' :
+        grid.flat().some(cell => cell?.ready) ? 'you have crops ready to harvest!' :
+        'consider planting crops suitable for the current weather.'
+      }`;
+      
+      setMessages(prev => [...prev,
+        { role: 'user', content: message },
+        { role: 'assistant', content: fallback }
       ]);
     } finally {
       setIsTyping(false);
@@ -249,7 +276,8 @@ function SmartFarmGame() {
       setCurrentMessage('');
     }
   };
-return (
+
+  return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-green-100 p-6">
       {/* Header */}
       <div className="bg-white/80 backdrop-blur rounded-lg shadow-lg p-6 mb-6">
@@ -374,12 +402,89 @@ return (
             </button>
             <button
               className="flex-1 h-16 border border-gray-200 hover:bg-gray-50 rounded-lg flex items-center justify-center gap-2 text-lg transition-colors"
-              onClick={() => setShowAdvisor(true)}
+              onClick={() => setShowAdvisor(!showAdvisor)}
             >
               <MessageSquare className="w-6 h-6" />
               Advisor
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Advisor Panel */}
+      <div 
+        className={`fixed top-24 right-6 bottom-24 w-96 bg-white rounded-lg shadow-lg overflow-hidden transition-all duration-300 ${
+          showAdvisor ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="flex flex-col h-full">
+          <div className="flex justify-between items-center p-4 border-b">
+            <h2 className="text-xl font-bold">Farm Advisor</h2>
+            <button 
+              onClick={() => setShowAdvisor(false)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-lg p-3 ${
+                    msg.role === 'user'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-100'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 rounded-lg p-3">
+                  <div className="flex gap-2">
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100" />
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-200" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (currentMessage.trim()) {
+                handleAdvisorMessage(currentMessage);
+              }
+            }}
+            className="p-4 border-t"
+          >
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={currentMessage}
+                onChange={(e) => setCurrentMessage(e.target.value)}
+                placeholder="Ask for farming advice..."
+                className="flex-1 border rounded-lg px-4 py-2"
+                disabled={isLoading}
+              />
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Send
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
@@ -403,7 +508,7 @@ return (
         ))}
       </div>
 
-      {/* Modals */}
+      {/* Tutorial Modal */}
       {showTutorial && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
@@ -436,75 +541,6 @@ return (
                 Start Farming!
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Advisor Modal */}
-      {showAdvisor && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-lg w-full p-6 max-h-[80vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">Farm Advisor</h2>
-              <button 
-                onClick={() => setShowAdvisor(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto mb-4 space-y-4">
-              {messages.map((msg, index) => (
-                <div
-                  key={index}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded-lg p-3 ${
-                      msg.role === 'user'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-100'
-                    }`}
-                  >
-                    {msg.content}
-                  </div>
-                </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-100 rounded-lg p-3">
-                    Thinking...
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (currentMessage.trim()) {
-                  handleAdvisorMessage(currentMessage);
-                }
-              }}
-              className="flex gap-2"
-            >
-              <input
-                type="text"
-                value={currentMessage}
-                onChange={(e) => setCurrentMessage(e.target.value)}
-                placeholder="Ask for farming advice..."
-                className="flex-1 border rounded-lg px-4 py-2"
-                disabled={isLoading}
-              />
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Send
-              </button>
-            </form>
           </div>
         </div>
       )}
