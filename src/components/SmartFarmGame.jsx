@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Home, Sun, Cloud, Wind, Thermometer, Droplet, Activity, Leaf, MessageSquare, DollarSign } from 'lucide-react';
 import { CROPS, calculateYield, calculateLoanInterest, calculateMaintenanceCost, getWeatherEffect } from '../utils/gameUtils';
-import { getAdvice } from '../services/advisorService';
+import { getFarmingAdvice } from '../services/bedrock';
 
 export default function SmartFarmGame() {
   const [gameState, setGameState] = useState({
