@@ -73,30 +73,32 @@ export const getWeatherEffect = (weather, crop) => {
   }
 };
 
-export const getAdvice = (gameState, crops) => {
-  let advice = [];
+export const analyzeCropSuitability = (weather, temperature, moisture) => {
+  const suitability = {};
   
-  // Financial advice
-  if (gameState.money < 100) {
-    advice.push("Low on funds! Consider harvesting mature crops or taking a small loan.");
-  }
+  Object.entries(CROPS).forEach(([cropName, crop]) => {
+    let score = 1.0;
+    
+    // Temperature suitability
+    if (temperature >= crop.tempRange.min && temperature <= crop.tempRange.max) {
+      score *= 1.2;
+    } else if (temperature < crop.tempRange.min) {
+      score *= 0.5;
+    } else {
+      score *= 0.7;
+    }
+    
+    // Moisture suitability
+    if (Math.abs(moisture - crop.waterNeeds) <= 10) {
+      score *= 1.2;
+    } else if (Math.abs(moisture - crop.waterNeeds) <= 20) {
+      score *= 0.8;
+    } else {
+      score *= 0.5;
+    }
+    
+    suitability[cropName] = score;
+  });
   
-  // Weather advice
-  if (gameState.temperature > 85) {
-    advice.push("High temperatures! Water-loving crops will need extra care.");
-  } else if (gameState.temperature < 55) {
-    advice.push("Cold weather! Only cold-resistant crops will thrive.");
-  }
-  
-  // Sensor advice
-  if (gameState.sensors.length < 2 && gameState.money > 200) {
-    advice.push("Installing sensors will improve crop yields through better monitoring.");
-  }
-  
-  // Loan advice
-  if (gameState.loans > 0) {
-    advice.push(`Outstanding loans: $${gameState.loans}. Each day adds 1% interest.`);
-  }
-  
-  return advice.join(' ');
+  return suitability;
 };
