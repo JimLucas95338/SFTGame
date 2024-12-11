@@ -369,7 +369,7 @@ export default function SmartFarmGame() {
 
       {/* Advisor Modal */}
       {showAdvisor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed top-24 right-6 bottom-24 w-96 bg-white rounded-lg shadow-lg overflow-hidden">
           <div className="bg-white rounded-lg w-full max-w-md">
             <div className="p-4 border-b flex justify-between items-center">
               <h3 className="text-xl font-bold">Farm Advisor</h3>
