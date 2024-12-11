@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Sun, Cloud, Wind, Thermometer, Droplet, Activity, Leaf, MessageSquare, DollarSign } from 'lucide-react';
+import { getFarmingAdvice } from '../services/bedrock';
 
 function SmartFarmGame() {
   // Game Constants
@@ -54,6 +55,13 @@ function SmartFarmGame() {
   const [notifications, setNotifications] = useState([]);
   const [showAdvisor, setShowAdvisor] = useState(false);
   const [showTutorial, setShowTutorial] = useState(true);
+
+  // Advisor States
+  const [messages, setMessages] = useState([
+    { role: 'assistant', content: "Welcome! I'm your farm advisor. How can I help you today?" }
+  ]);
+  const [currentMessage, setCurrentMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Utility Functions
   const calculateYield = (crop, weather, temp, moisture, tempBonus = 1, moistureBonus = 1) => {
@@ -196,6 +204,29 @@ function SmartFarmGame() {
       });
       
       addNotification(`💰 Harvested ${cell.type} for $${finalValue}!`, 'success');
+    }
+  };
+
+  // AI Advisor Function
+  const handleAdvisorMessage = async () => {
+    if (!currentMessage.trim()) return;
+
+    try {
+      setIsLoading(true);
+      setMessages(prev => [...prev, { role: 'user', content: currentMessage }]);
+      
+      const aiResponse = await getFarmingAdvice(gameState, currentMessage);
+      setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
+      
+      setCurrentMessage('');
+    } catch (error) {
+      console.error('Error getting advice:', error);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: "I'm having trouble connecting. Please try again." 
+      }]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -393,7 +424,7 @@ function SmartFarmGame() {
       {/* Advisor Modal */}
       {showAdvisor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-lg w-full p-6">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6 max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold">Farm Advisor</h2>
               <button 
@@ -403,43 +434,58 @@ function SmartFarmGame() {
                 ✕
               </button>
             </div>
-            <div className="mt-4">
-              <div className="bg-green-50 rounded-lg p-4 mb-4">
-                <h3 className="font-medium mb-2">Current Conditions:</h3>
-                <ul className="space-y-1 text-sm">
-                  <li>Weather: {gameState.weather}</li>
-                  <li>Temperature: {gameState.temperature}°F</li>
-                  <li>Moisture: {gameState.moisture}%</li>
-                </ul>
-              </div>
-              <div className="space-y-4">
-                <h3 className="font-medium">Recommendations:</h3>
-                {Object.entries(CROPS)
-                  .filter(([, crop]) => 
-                    gameState.temperature >= crop.tempRange.min && 
-                    gameState.temperature <= crop.tempRange.max
-                  )
-                  .map(([name, crop]) => (
-                    <div key={name} className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg">
-                      <span className="text-2xl">{crop.icon}</span>
-                      <div>
-                        <p className="font-medium">{name}</p>
-                        <p className="text-sm text-gray-600">{crop.description}</p>
-                      </div>
-                    </div>
-                  ))
-                }
-                {Object.entries(CROPS)
-                  .filter(([, crop]) => 
-                    gameState.temperature >= crop.tempRange.min && 
-                    gameState.temperature <= crop.tempRange.max
-                  ).length === 0 && (
-                    <p className="text-gray-600 italic">
-                      Current conditions are challenging for most crops. Consider waiting for better weather.
-                    </p>
-                  )}
-              </div>
+
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto mb-4 space-y-4">
+              {messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-lg p-3 ${
+                      msg.role === 'user'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-100'
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 rounded-lg p-3">
+                    Thinking...
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Input Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAdvisorMessage();
+              }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                value={currentMessage}
+                onChange={(e) => setCurrentMessage(e.target.value)}
+                placeholder="Ask for farming advice..."
+                className="flex-1 border rounded-lg px-4 py-2"
+                disabled={isLoading}
+              />
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Send
+              </button>
+            </form>
           </div>
         </div>
       )}
