@@ -10,33 +10,45 @@ const bedrockClient = new BedrockRuntimeClient({
 
 export async function getFarmingAdvice(gameState, message) {
   try {
-    // Build rich context for the AI
-    const gameContext = `
-      Current Farm State:
-      - Day: ${gameState.day}
-      - Weather: ${gameState.weather} with ${gameState.temperature}°F
-      - Moisture Level: ${gameState.moisture}%
-      - Available Funds: $${gameState.money}
+    // Calculate which crops would thrive in current conditions
+    const suitableCrops = {
+      CORN: gameState.temperature >= 60 && gameState.temperature <= 85 && gameState.moisture >= 55,
+      WHEAT: gameState.temperature >= 55 && gameState.temperature <= 75 && gameState.moisture >= 35,
+      TOMATO: gameState.temperature >= 65 && gameState.temperature <= 90 && gameState.moisture >= 70
+    };
 
-      Crop Information:
-      - Corn: Needs 60-85°F, 60% moisture, $25 to plant
-      - Wheat: Needs 55-75°F, 40% moisture, $15 to plant
-      - Tomato: Needs 65-90°F, 75% moisture, $35 to plant
+    const recommendations = Object.entries(suitableCrops)
+      .filter(([, suitable]) => suitable)
+      .map(([crop]) => crop);
+
+    const gameContext = `
+      Current Farm Status:
+      - Day: ${gameState.day}
+      - Weather: ${gameState.weather}
+      - Temperature: ${gameState.temperature}°F
+      - Moisture: ${gameState.moisture}%
+      - Available Money: $${gameState.money}
+
+      Currently Suitable Crops: ${recommendations.join(', ') || 'Conditions are challenging for all crops'}
+
+      Crop Requirements:
+      - Corn ($25): Needs 60-85°F and 60% moisture
+      - Wheat ($15): Needs 55-75°F and 40% moisture
+      - Tomato ($35): Needs 65-90°F and 75% moisture
 
       Player question: "${message}"
     `;
 
-    const prompt = `\n\nHuman: You are an AI farming advisor in a farming simulation game. Be helpful and specific, considering:
-    - Current weather and temperature conditions
-    - Crop requirements and costs
-    - Player's available funds
-    - Long-term planning and risk management
-    
-    Consider yourself a seasoned farmer with deep practical knowledge. Use a friendly, conversational tone but stay focused on giving actionable advice.
+    const prompt = `\n\nHuman: You are an experienced farming advisor in a farming simulation game. Provide specific, practical advice based on current conditions. Your responses should be:
+    - Specific to the player's question
+    - Consider current weather conditions and funds
+    - Include clear recommendations
+    - Explain the reasoning behind your advice
+    - Be brief but informative
     
     ${gameContext}
 
-    Assistant: Let me provide specific farming advice based on your current situation.`;
+    Assistant: Let me analyze your farm's current conditions and provide targeted advice.`;
 
     const command = new InvokeModelCommand({
       modelId: "anthropic.claude-v2",
@@ -45,7 +57,7 @@ export async function getFarmingAdvice(gameState, message) {
       body: JSON.stringify({
         prompt: prompt,
         max_tokens_to_sample: 300,
-        temperature: 0.7,
+        temperature: 0.8,  // Increased for more response variation
         top_k: 250,
         top_p: 0.999,
         stop_sequences: ["\n\nHuman:"]
@@ -54,10 +66,18 @@ export async function getFarmingAdvice(gameState, message) {
 
     const response = await bedrockClient.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    return responseBody.completion;
+    
+    // Add some randomization to the fallback response if AI fails
+    const fallbackResponses = [
+      `With ${gameState.weather} weather at ${gameState.temperature}°F, ${recommendations.length > 0 ? recommendations[0] : 'wheat'} might be a good choice. What's your farming strategy?`,
+      `Current conditions are good for ${recommendations.join(' or ')}. Would you like specific planting advice?`,
+      `I recommend focusing on ${recommendations[0]} given the current weather. How can I help with your farming decisions?`
+    ];
+
+    return responseBody.completion || fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
 
   } catch (error) {
     console.error('Error getting AI farming advice:', error);
-    return `Based on current conditions (${gameState.weather}, ${gameState.temperature}°F), I recommend focusing on crop health and resource management. Let me know if you have specific questions about any crops or farming strategies.`;
+    return `With ${gameState.temperature}°F and ${gameState.moisture}% moisture, consider focusing on weather-appropriate crops. What would you like to know about specific crops?`;
   }
 }
