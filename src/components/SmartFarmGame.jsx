@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-export default function SmartFarmGame() {
+function SmartFarmGame() {
   // Game Constants
   const CROPS = {
     CORN: { 
