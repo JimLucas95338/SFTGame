@@ -383,7 +383,6 @@ export default function SmartFarmGame() {
             
             <div className="h-96 overflow-y-auto p-4 space-y-4">
               {messages.map((msg, index) => (
-          {messages.map((msg, index) => (
                 <div
                   key={index}
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
