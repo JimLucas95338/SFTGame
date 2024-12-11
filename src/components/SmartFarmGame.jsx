@@ -240,16 +240,30 @@ export default function SmartFarmGame() {
   const handleAdvisorMessage = async (message) => {
     setIsTyping(true);
     try {
-      const advice = getAdvice(gameState, message, grid);
+      // First get context-aware advice
+      const context = analyzeFarmState(gameState, grid);
+      const localAdvice = getAdvice(gameState, message, grid);
+      
+      // Then send to Bedrock for more sophisticated response
+      const bedrockResponse = await getFarmingAdvice(gameState, message);
+      
+      console.log('Local advice:', localAdvice);
+      console.log('Bedrock response:', bedrockResponse);
+      
+      // Combine local and AI advice
+      const finalResponse = bedrockResponse || localAdvice;
+
       setMessages(prev => [...prev, 
         { role: 'user', content: message },
-        { role: 'assistant', content: advice }
+        { role: 'assistant', content: finalResponse }
       ]);
     } catch (error) {
       console.error('Error getting advice:', error);
+      // Fallback to local advice if Bedrock fails
+      const fallbackAdvice = getAdvice(gameState, message, grid);
       setMessages(prev => [...prev, 
         { role: 'user', content: message },
-        { role: 'assistant', content: "I'm having trouble analyzing the farm right now. Please try again." }
+        { role: 'assistant', content: fallbackAdvice }
       ]);
     }
     setIsTyping(false);
