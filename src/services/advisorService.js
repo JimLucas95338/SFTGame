@@ -38,7 +38,7 @@ function analyzeCropSuitability(weather, temperature, moisture) {
   return suitability;
 }
 
-function analyzeFarmState(gameState, grid) {
+export function analyzeFarmState(gameState, grid) {
   const crops = grid.flat().filter(cell => cell !== null);
   const readyCrops = crops.filter(crop => crop.ready);
   const suitability = analyzeCropSuitability(
