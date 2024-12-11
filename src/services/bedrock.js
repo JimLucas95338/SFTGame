@@ -17,16 +17,14 @@ export async function getFarmingAdvice(gameState, message) {
       - Moisture: ${gameState.moisture}%
       - Available Money: $${gameState.money}
       - Current Day: ${gameState.day}
-
       Player message: "${message}"
     `;
 
     const prompt = `\n\nHuman: ${gameContext}
-
     Assistant: Let me respond naturally as a friendly farm advisor.`;
 
     const command = new InvokeModelCommand({
-      modelId: "anthropic.claude-3-sonnet-20240229-v1:0",  // Updated to Claude 3.5 Sonnet
+      modelId: "anthropic.claude-v2", // Changed to match your available model
       contentType: "application/json",
       accept: "application/json",
       body: JSON.stringify({
@@ -40,17 +38,16 @@ export async function getFarmingAdvice(gameState, message) {
     });
 
     console.log('Making request to Bedrock with model:', command.input.modelId);
-
     const response = await bedrockClient.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
     return responseBody.completion;
-
   } catch (error) {
     console.error('Detailed error:', {
       name: error.name,
       message: error.message,
       code: error.code,
-      requestId: error.$metadata?.requestId
+      requestId: error.$metadata?.requestId,
+      status: error.status
     });
     
     return "I'm having trouble connecting. Would you like some general farming advice instead?";
