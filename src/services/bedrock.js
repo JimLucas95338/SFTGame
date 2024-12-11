@@ -24,7 +24,7 @@ export async function getFarmingAdvice(gameState, message) {
     Assistant: Let me respond naturally as a friendly farm advisor.`;
 
     const command = new InvokeModelCommand({
-      modelId: "anthropic.claude-3-5-sonnet-20240620-v1:0", // Updated to correct model ID
+      modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0", // Updated to correct model ID
       contentType: "application/json",
       accept: "application/json",
       body: JSON.stringify({
