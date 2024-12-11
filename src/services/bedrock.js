@@ -24,29 +24,39 @@ export async function getFarmingAdvice(gameState, message) {
     Assistant: Let me respond naturally as a friendly farm advisor.`;
 
     const command = new InvokeModelCommand({
-      modelId: "anthropic.claude-v2", // Changed to match your available model
+      modelId: "anthropic.claude-3-5-sonnet-20240620-v1:0", // Updated to correct model ID
       contentType: "application/json",
       accept: "application/json",
       body: JSON.stringify({
-        prompt: prompt,
-        max_tokens_to_sample: 500,
-        temperature: 0.9,
-        top_k: 250,
-        top_p: 0.999,
-        stop_sequences: ["\n\nHuman:"]
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 500,
+        messages: [
+          {
+            role: "user",
+            content: gameContext
+          }
+        ],
+        temperature: 0.7
       })
     });
 
-    console.log('Making request to Bedrock with model:', command.input.modelId);
+    console.log('Making request to Bedrock with:', {
+      modelId: command.input.modelId,
+      region: bedrockClient.config.region
+    });
+
     const response = await bedrockClient.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    return responseBody.completion;
+    console.log('Response from Bedrock:', responseBody);
+
+    return responseBody.completion || responseBody.content;
   } catch (error) {
     console.error('Detailed error:', {
       name: error.name,
       message: error.message,
       code: error.code,
       requestId: error.$metadata?.requestId,
+      region: bedrockClient.config.region,
       status: error.status
     });
     
