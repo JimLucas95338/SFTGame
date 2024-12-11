@@ -1,24 +1,27 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
+// Debug logging for credentials
+console.log('AWS Region:', process.env.REACT_APP_AWS_REGION);
+console.log('Access Key ID exists:', !!process.env.REACT_APP_AWS_ACCESS_KEY_ID);
+console.log('Secret Key exists:', !!process.env.REACT_APP_AWS_SECRET_ACCESS_KEY);
+
 const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.REACT_APP_AWS_REGION,
+  region: process.env.REACT_APP_AWS_REGION || 'us-west-2',
   credentials: {
     accessKeyId: process.env.REACT_APP_AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.REACT_APP_AWS_SECRET_ACCESS_KEY
   },
-  endpoint: `https://bedrock-runtime.${process.env.REACT_APP_AWS_REGION}.amazonaws.com`,
-  maxAttempts: 3
+  endpoint: `https://bedrock-runtime.us-west-2.amazonaws.com`
 });
 
 export async function getFarmingAdvice(gameState, message) {
   try {
-    // Verify credentials are available
-    if (!process.env.REACT_APP_AWS_ACCESS_KEY_ID || 
-        !process.env.REACT_APP_AWS_SECRET_ACCESS_KEY || 
-        !process.env.REACT_APP_AWS_REGION) {
-      console.error('AWS credentials not properly configured');
-      return "I'm having trouble connecting to my farming knowledge. Please check the configuration.";
-    }
+    // Log configuration before making the request
+    console.log('Bedrock Client Config:', {
+      region: bedrockClient.config.region,
+      endpoint: bedrockClient.config.endpoint,
+      credentials: 'Configured:' + !!bedrockClient.config.credentials
+    });
 
     const gameContext = `
       You are a friendly AI farm advisor who enjoys chatting with farmers. While you know all about farming and current conditions:
@@ -27,8 +30,6 @@ export async function getFarmingAdvice(gameState, message) {
       - Moisture: ${gameState.moisture}%
       - Available Money: $${gameState.money}
       - Current Day: ${gameState.day}
-
-      Feel free to chat naturally about any topic, share stories, or give advice. You can be witty and personable while still being helpful.
 
       Player message: "${message}"
     `;
@@ -51,31 +52,25 @@ export async function getFarmingAdvice(gameState, message) {
       })
     });
 
-    try {
-      const response = await bedrockClient.send(command);
-      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-      return responseBody.completion;
-    } catch (apiError) {
-      console.error('API Error:', apiError);
-      // Check for specific error types
-      if (apiError.name === 'AccessDeniedException') {
-        return "I don't have proper access to my farming knowledge right now. Please check the permissions.";
-      }
-      throw apiError; // Re-throw for general error handling
-    }
+    // Log the request being made
+    console.log('Making request to Bedrock with command:', {
+      modelId: command.input.modelId,
+      endpoint: bedrockClient.config.endpoint
+    });
+
+    const response = await bedrockClient.send(command);
+    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+    return responseBody.completion;
 
   } catch (error) {
-    console.error('Error getting AI response:', error);
-    
-    // More specific error messages based on error type
-    if (error.name === 'NetworkError' || error.message.includes('Failed to fetch')) {
-      return "I'm having trouble connecting to the network. Please check your internet connection.";
-    }
-    
-    if (error.name === 'TypeError') {
-      return "There seems to be a configuration issue. Please verify the AWS settings.";
-    }
+    console.error('Detailed error:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      requestId: error.$metadata?.requestId,
+      status: error.$metadata?.httpStatusCode
+    });
 
-    return "I'm having some technical difficulties. Please try again in a moment.";
+    return "I'm having trouble connecting to my farming knowledge. Please check the configuration.";
   }
 }
