@@ -26,26 +26,31 @@ export async function getFarmingAdvice(gameState, message) {
       contentType: "application/json",
       accept: "application/json",
       body: JSON.stringify({
-        prompt: gameContext,
+        anthropic_version: "bedrock-2023-05-31",
+        messages: [
+          {
+            role: "user",
+            content: gameContext
+          }
+        ],
         max_tokens: 500,
-        temperature: 0.7,
-        top_p: 0.999,
-        stop_sequences: ["\n\nHuman:"]
+        temperature: 0.7
       })
     });
 
     console.log('Making Bedrock request...', {
       modelId: command.input.modelId,
-      region: bedrockClient.config.region
+      region: bedrockClient.config.region,
+      request: gameContext
     });
 
     const response = await bedrockClient.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
     console.log('Bedrock response:', responseBody);
 
-    // Ensure we return a string
-    if (typeof responseBody.completion === 'string') {
-      return responseBody.completion;
+    // Return the message content from the response
+    if (responseBody.messages && responseBody.messages[0]) {
+      return responseBody.messages[0].content;
     }
     
     // Fallback response if we don't get what we expect
