@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Sun, Cloud, Wind, Thermometer, Droplet, Activity, Leaf, MessageSquare, DollarSign } from 'lucide-react';
 import { getFarmingAdvice } from '../services/bedrock';
 
@@ -59,13 +59,29 @@ function SmartFarmGame() {
   // AI States
   const [messages, setMessages] = useState([{
     role: 'assistant',
-    content: "Welcome! I'm your farm advisor. What would you like to know about your farm?"
+    content: "Welcome! I'm your farm advisor. How can I help you optimize your farm today?"
   }]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Game Logic Functions
+  // Farm Analysis Helper
+  const analyzeFarmState = useCallback(() => {
+    const plantedCrops = grid.flat().filter(cell => cell !== null);
+    const readyCrops = plantedCrops.filter(crop => crop.ready);
+    const cropTypes = new Set(plantedCrops.map(crop => crop.type));
+    
+    return {
+      plantedCount: plantedCrops.length,
+      readyCount: readyCrops.length,
+      diversity: cropTypes.size,
+      availablePlots: 36 - plantedCrops.length,
+      potentialIncome: readyCrops.reduce((sum, crop) => {
+        return sum + (CROPS[crop.type].value * crop.yieldValue);
+      }, 0)
+    };
+  }, [grid]);
+
   const addNotification = (message, type = 'info') => {
     const id = Date.now();
     setNotifications(prev => [...prev, { id, message, type }]);
@@ -87,7 +103,11 @@ function SmartFarmGame() {
     }));
 
     if (newTemp > 90) {
-      addNotification('🌡️ High temperature alert!', 'warning');
+      addNotification('🌡️ High temperature alert! Consider drought-resistant crops.', 'warning');
+      const plantedCrops = grid.flat().filter(cell => cell && !cell.ready);
+      if (plantedCrops.length > 0) {
+        addNotification('💧 Water needs have increased for all crops.', 'info');
+      }
     }
   };
 
@@ -113,15 +133,7 @@ function SmartFarmGame() {
     return yieldValue;
   };
 
-  const getWeatherEffect = (weather, crop) => {
-    switch (weather) {
-      case 'sunny': return crop.waterNeeds > 60 ? 'Needs extra water' : 'Ideal conditions';
-      case 'rainy': return crop.waterNeeds < 40 ? 'Risk of root rot' : 'Good growing weather';
-      case 'windy': return 'Increased water evaporation';
-      default: return 'Normal conditions';
-    }
-  };
-const growCrops = () => {
+  const growCrops = () => {
     setGrid(prevGrid => prevGrid.map(row => 
       row.map(cell => {
         if (!cell?.type) return cell;
@@ -160,6 +172,16 @@ const growCrops = () => {
     simulateWeatherChange();
     growCrops();
     setGameState(prev => ({ ...prev, day: prev.day + 1 }));
+
+    // Check for ready crops after advancing day
+    checkHarvestReminders();
+  };
+
+  const checkHarvestReminders = () => {
+    const readyCrops = grid.flat().filter(cell => cell?.ready);
+    if (readyCrops.length > 0) {
+      addNotification(`✨ You have ${readyCrops.length} crops ready to harvest!`, 'success');
+    }
   };
 
   const plantCrop = (row, col) => {
@@ -214,37 +236,14 @@ const growCrops = () => {
     setIsLoading(true);
 
     try {
-      // Add user message
       setMessages(prev => [...prev, {
         role: 'user',
         content: userMessage
       }]);
 
-      let response = '';
+      const farmAnalysis = analyzeFarmState();
+      const response = await getFarmingAdvice(gameState, userMessage, grid);
 
-      if (userMessage.toLowerCase().includes('weather')) {
-        response = `Current weather is ${gameState.weather} at ${gameState.temperature}°F with ${gameState.moisture}% moisture.`;
-      } else if (userMessage.toLowerCase().includes('crop')) {
-        const suitableCrops = Object.entries(CROPS)
-          .filter(([, crop]) => 
-            gameState.temperature >= crop.tempRange.min && 
-            gameState.temperature <= crop.tempRange.max
-          )
-          .map(([name]) => name);
-        
-        response = `Given the current conditions, I recommend planting ${suitableCrops.join(' or ')}.`;
-      } else {
-        // Get AI response
-        try {
-          const aiResponse = await getFarmingAdvice(gameState, userMessage);
-          response = aiResponse || "How can I help you with your farm?";
-        } catch (error) {
-          console.error('AI Error:', error);
-          response = "I'm having trouble right now. Try asking about the weather or which crops to plant.";
-        }
-      }
-
-      // Add assistant response
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: response
@@ -254,12 +253,21 @@ const growCrops = () => {
       console.error('Error in handleAdvisorMessage:', error);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: "I'm having trouble understanding. Please try asking about the weather or crops."
+        content: "I'm having trouble analyzing your farm right now. Please try asking about specific crops or weather conditions."
       }]);
     } finally {
       setIsTyping(false);
       setIsLoading(false);
       setCurrentMessage('');
+    }
+  };
+
+  const getWeatherIcon = (weather) => {
+    switch (weather) {
+      case 'sunny': return <Sun className="text-yellow-500" size={24} />;
+      case 'rainy': return <Cloud className="text-blue-500" size={24} />;
+      case 'windy': return <Wind className="text-gray-500" size={24} />;
+      default: return <Sun className="text-yellow-500" size={24} />;
     }
   };
 
@@ -356,7 +364,7 @@ const growCrops = () => {
                   </div>
                 </button>
               ))}
-            </div>
+              </div>
           </div>
 
           {/* Actions */}
@@ -493,8 +501,8 @@ const growCrops = () => {
         </div>
       )}
 
-     {/* Notifications */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-2 max-w-sm">
+      {/* Notifications */}
+      <div className="fixed bottom-6 right-6 flex flex-col gap-2 max-w-sm z-50">
         {notifications.map(notification => (
           <div
             key={notification.id}
