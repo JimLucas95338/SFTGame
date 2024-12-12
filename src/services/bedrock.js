@@ -65,43 +65,136 @@ function getOptimalCrops(weather, temperature, moisture) {
     .map(([crop]) => crop);
 }
 
+// Helper to classify message type
+function classifyMessage(message) {
+  const lowerMessage = message.toLowerCase();
+  
+  // Greeting patterns
+  if (/^(hi|hello|hey|greetings|good (morning|afternoon|evening))$/i.test(message)) {
+    return 'greeting';
+  }
+
+  // Personal/identity questions
+  if (lowerMessage.includes('are you') || 
+      lowerMessage.includes('who are you') || 
+      lowerMessage.includes('what are you') ||
+      lowerMessage.includes('bot') ||
+      lowerMessage.includes('human')) {
+    return 'identity';
+  }
+
+  // Farm-related patterns
+  if (lowerMessage.includes('crop') ||
+      lowerMessage.includes('weather') ||
+      lowerMessage.includes('plant') ||
+      lowerMessage.includes('harvest') ||
+      lowerMessage.includes('sensor') ||
+      lowerMessage.includes('money') ||
+      lowerMessage.includes('temperature') ||
+      lowerMessage.includes('moisture') ||
+      lowerMessage.includes('farm') ||
+      lowerMessage.includes('grow') ||
+      lowerMessage.includes('loan')) {
+    return 'farming';
+  }
+
+  return 'other';
+}
+
+// Enhanced message handler
+function getContextualResponse(messageType, farmAnalysis) {
+  const greetings = [
+    "Hello! I'm here to help with your farm. I notice the weather is perfect for planting today!",
+    "Hi there! How can I assist with your farm? I'd be happy to analyze your current conditions.",
+    "Greetings! I'm ready to help optimize your farm. Would you like to know about the best crops to plant?",
+    "Welcome! I'm your farming advisor. Have you checked today's weather conditions?"
+  ];
+
+  const identityResponses = [
+    "I'm your AI farm advisor, specialized in helping you optimize your crops and maximize yields. I can analyze weather patterns, suggest the best crops to plant, and help manage your farm's finances. Would you like some specific advice about your farm?",
+    "I'm an AI assistant focused on farming. While I enjoy our chats, my real expertise is in helping you make the most of your farm. I can help with crop selection, weather analysis, and financial planning. What aspect of farming would you like to discuss?",
+    "Yes, I'm an AI farming specialist! I'm here to help you succeed by providing detailed advice about crops, weather, and farm management. I notice your farm has some interesting conditions right now - would you like to hear about them?"
+  ];
+
+  const otherResponses = [
+    `I'm your farming specialist! While I enjoy chatting, I'd love to help you with your farm. For example, I notice you have ${farmAnalysis.availablePlots} plots available - would you like advice on what to plant?`,
+    "While I enjoy our conversation, I'm actually specialized in farming matters. I can help you optimize your crops, analyze weather conditions, or plan your farm's growth. What farming aspect interests you most?",
+    "I'm your dedicated farming advisor, and I'd love to help you succeed! Would you like to know about your current crop conditions, weather impacts, or financial opportunities for your farm?"
+  ];
+
+  const randomIndex = Math.floor(Math.random() * 3);
+  switch (messageType) {
+    case 'greeting':
+      return greetings[randomIndex];
+    case 'identity':
+      return identityResponses[randomIndex];
+    case 'other':
+      return otherResponses[randomIndex];
+    default:
+      return null;
+  }
+}
+
+function generateDetailedFallback(gameState, analysis, optimalCrops) {
+  const responses = [
+    `Based on current conditions, let me help you optimize your farm. ${analysis.readyCount > 0 ? `You have ${analysis.readyCount} crops ready to harvest worth $${analysis.potentialIncome}. ` : ''}${optimalCrops[0]} would grow exceptionally well right now.`,
+    
+    `I've analyzed your farm's conditions. ${gameState.money < 50 ? "Your funds are running low - consider harvesting crops or taking a small loan. " : ""}With the current ${gameState.weather} weather and ${gameState.temperature}°F temperature, ${optimalCrops[0]} would be your best crop choice.`,
+    
+    `Let me give you a quick farm update. ${analysis.availablePlots > 0 ? `You have ${analysis.availablePlots} plots available for planting. ` : ''}The current conditions are ideal for growing ${optimalCrops[0]}.${gameState.sensors.length < 2 && gameState.money > 200 ? " Consider investing in sensors to improve your yields!" : ""}`
+  ];
+
+  return responses[Math.floor(Math.random() * responses.length)];
+}
+
 export async function getFarmingAdvice(gameState, message, grid) {
   try {
+    const messageType = classifyMessage(message);
     const farmAnalysis = analyzeConditions(gameState, grid);
+    
+    // Handle non-farming messages with contextual responses
+    const contextualResponse = getContextualResponse(messageType, farmAnalysis);
+    if (contextualResponse) {
+      return contextualResponse;
+    }
+
     const optimalCrops = getOptimalCrops(
       gameState.weather, 
       gameState.temperature, 
       gameState.moisture
     );
 
+    // For farming-related questions, use the AI with enhanced context
     const command = new InvokeModelCommand({
       modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
       contentType: "application/json",
       accept: "application/json",
       body: JSON.stringify({
         anthropic_version: "bedrock-2023-05-31",
-        system: `You are an expert farming advisor in a farming simulation game. Be specific and strategic in your advice.
+        system: `You are a friendly and knowledgeable farming advisor AI in a farming simulation game. 
+        Maintain a natural, conversational tone while providing specific farming advice.
+        Always acknowledge the player's questions before giving detailed recommendations.
+        Include data-driven insights about their farm conditions when relevant.
 
         Game mechanics:
         - Players manage a 6x6 grid (36 plots)
         - Weather affects crop growth and yields
-        - Sensors can be purchased to improve yields
+        - Sensors improve yields
         - Loans available if money is low
-        - Each crop has optimal growing conditions
         
         Crops:
         CORN: 60-85°F, 60% moisture, $25 cost, $100 value, 3 days growth
         WHEAT: 55-75°F, 40% moisture, $15 cost, $75 value, 2 days growth
         TOMATO: 65-90°F, 75% moisture, $35 cost, $150 value, 4 days growth
         
-        Focus on practical advice about:
-        - Which crops to plant based on conditions
-        - When to harvest
-        - Managing money and loans
-        - Using sensors strategically
-        - Weather impacts
+        Focus on:
+        - Specific recommendations based on current conditions
+        - Financial advice considering their money and loans
+        - Strategic crop placement and timing
+        - Weather impact analysis
+        - Sensor placement optimization
         
-        Keep responses concise but specific.`,
+        Always maintain a helpful, encouraging tone.`,
         messages: [
           {
             role: "user",
@@ -131,7 +224,7 @@ export async function getFarmingAdvice(gameState, message, grid) {
                 
                 Player Question: "${message}"
                 
-                Provide specific advice considering all these factors.`
+                Provide a natural, conversational response while including relevant farming advice.`
               }
             ]
           }
@@ -144,48 +237,17 @@ export async function getFarmingAdvice(gameState, message, grid) {
     const response = await bedrockClient.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
     
-    if (responseBody.messages?.[0]?.content?.[0]?.text) {
-      return responseBody.messages[0].content[0].text;
-    }
-
-    // Enhanced fallback response if AI fails
-    return generateDetailedFallback(gameState, farmAnalysis, optimalCrops);
+    return responseBody.messages?.[0]?.content?.[0]?.text || 
+           generateDetailedFallback(gameState, farmAnalysis, optimalCrops);
 
   } catch (error) {
     console.error('Bedrock error:', error);
-    return generateDetailedFallback(gameState, analyzeConditions(gameState, grid), 
-      getOptimalCrops(gameState.weather, gameState.temperature, gameState.moisture));
+    const farmAnalysis = analyzeConditions(gameState, grid);
+    const optimalCrops = getOptimalCrops(
+      gameState.weather, 
+      gameState.temperature, 
+      gameState.moisture
+    );
+    return generateDetailedFallback(gameState, farmAnalysis, optimalCrops);
   }
-}
-
-function generateDetailedFallback(gameState, analysis, optimalCrops) {
-  const advice = [];
-
-  // Add condition-specific advice
-  if (analysis.readyCount > 0) {
-    advice.push(`You have ${analysis.readyCount} crops ready to harvest worth $${analysis.potentialIncome}.`);
-  }
-
-  if (gameState.money < 50) {
-    advice.push("Your funds are low. Consider harvesting crops or taking a small loan.");
-  }
-
-  if (analysis.availablePlots > 5) {
-    advice.push(`You have ${analysis.availablePlots} empty plots. ${optimalCrops[0]} would grow well in current conditions.`);
-  }
-
-  if (gameState.sensors.length < 2 && gameState.money > 200) {
-    advice.push("Installing more sensors would help optimize your crop yields.");
-  }
-
-  // Add weather-specific advice
-  const weatherAdvice = {
-    sunny: "Sunny conditions are good for most crops. Monitor moisture levels.",
-    rainy: "Rainy weather helps save on watering costs. Good for water-loving crops.",
-    windy: "Wind increases water evaporation. Drought-resistant crops do better."
-  }[gameState.weather] || "Current weather is suitable for farming.";
-  
-  advice.push(weatherAdvice);
-
-  return advice.join(" ");
 }
