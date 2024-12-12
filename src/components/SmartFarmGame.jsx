@@ -206,8 +206,8 @@ const growCrops = () => {
     }
   };
 
-  const handleAdvisorMessage = async (message = currentMessage) => {
-    if (!message.trim()) return;
+  const handleAdvisorMessage = async (message) => {
+  const response = await getFarmingAdvice(gameState, message, grid);
 
     const userMessage = message.trim();
     setIsTyping(true);
