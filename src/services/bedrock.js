@@ -16,23 +16,30 @@ export async function getFarmingAdvice(gameState, message) {
       accept: "application/json",
       body: JSON.stringify({
         anthropic_version: "bedrock-2023-05-31",
-        system: "You are a friendly farming advisor who helps players make optimal decisions based on weather conditions and crop requirements.",
+        system: `You are a knowledgeable farming advisor in a farming simulation game. 
+        Available crops:
+        - CORN: Needs 60-85°F, 60% moisture, costs $25, sells for $100
+        - WHEAT: Needs 55-75°F, 40% moisture, costs $15, sells for $75
+        - TOMATO: Needs 65-90°F, 75% moisture, costs $35, sells for $150
+        
+        Be specific about crop recommendations based on current weather, temperature, and moisture conditions. 
+        Consider the player's money when giving advice. Keep responses brief but informative.`,
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Current conditions:
+                text: `Current farm conditions:
                 - Weather: ${gameState.weather}
                 - Temperature: ${gameState.temperature}°F
                 - Moisture: ${gameState.moisture}%
-                - Money: $${gameState.money}
+                - Available Money: $${gameState.money}
                 - Day: ${gameState.day}
 
-                Question: ${message}
+                Player asks: ${message}
                 
-                Please provide brief, practical farming advice based on these conditions.`
+                Provide specific farming advice considering current weather conditions, costs, and potential profits.`
               }
             ]
           }
@@ -42,30 +49,36 @@ export async function getFarmingAdvice(gameState, message) {
       })
     });
 
-    console.log('Bedrock request:', {
-      modelId: command.input.modelId,
-      region: bedrockClient.config.region
-    });
-
     const response = await bedrockClient.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    console.log('Bedrock response:', responseBody);
 
     if (responseBody.messages && responseBody.messages[0] && responseBody.messages[0].content) {
-      // Extract text from content array
       return responseBody.messages[0].content[0].text;
     }
 
-    return "How can I help you with your farming today?";
+    return `Based on current conditions (${gameState.weather}, ${gameState.temperature}°F), 
+            I recommend focusing on ${
+              gameState.temperature > 85 ? 'heat-resistant crops like TOMATO' :
+              gameState.temperature < 55 ? 'cold-resistant crops like WHEAT' :
+              'balanced crops like CORN'
+            }.`;
 
   } catch (error) {
-    console.error('Bedrock error:', {
-      name: error.name,
-      message: error.message,
-      code: error.code,
-      metadata: error.$metadata
-    });
+    console.error('Bedrock error:', error);
     
-    return "I'm having trouble connecting. Let me help you with current conditions instead.";
+    // Provide meaningful fallback advice based on conditions
+    const fallbackAdvice = () => {
+      const conditions = [];
+      if (gameState.temperature > 85) conditions.push("It's quite hot");
+      if (gameState.temperature < 55) conditions.push("It's quite cold");
+      if (gameState.moisture > 70) conditions.push("soil is very moist");
+      if (gameState.moisture < 40) conditions.push("soil is dry");
+      
+      return conditions.length > 0 
+        ? `Note that ${conditions.join(' and ')}. Consider this when choosing crops.`
+        : "Conditions are moderate. Any crop should grow well.";
+    };
+
+    return fallbackAdvice();
   }
 }
