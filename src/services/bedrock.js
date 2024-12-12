@@ -8,38 +8,130 @@ const bedrockClient = new BedrockRuntimeClient({
   }
 });
 
-export async function getFarmingAdvice(gameState, message) {
+// Helper to analyze current farm conditions
+function analyzeConditions(gameState, grid) {
+  const plantedCrops = grid.flat().filter(cell => cell !== null);
+  const readyCrops = plantedCrops.filter(crop => crop.ready);
+  const cropTypes = new Set(plantedCrops.map(crop => crop.type));
+  
+  return {
+    plantedCount: plantedCrops.length,
+    readyCount: readyCrops.length,
+    diversity: cropTypes.size,
+    availablePlots: 36 - plantedCrops.length,
+    potentialIncome: readyCrops.reduce((sum, crop) => {
+      const baseValue = {
+        CORN: 100,
+        WHEAT: 75,
+        TOMATO: 150
+      }[crop.type] || 0;
+      return sum + (baseValue * crop.yieldValue);
+    }, 0)
+  };
+}
+
+// Helper to get optimal crops for current conditions
+function getOptimalCrops(weather, temperature, moisture) {
+  const scores = {
+    CORN: 0,
+    WHEAT: 0,
+    TOMATO: 0
+  };
+
+  // Temperature scoring
+  if (temperature >= 60 && temperature <= 85) scores.CORN += 2;
+  if (temperature >= 55 && temperature <= 75) scores.WHEAT += 2;
+  if (temperature >= 65 && temperature <= 90) scores.TOMATO += 2;
+
+  // Moisture scoring
+  if (moisture >= 55 && moisture <= 65) scores.CORN += 2;
+  if (moisture >= 35 && moisture <= 45) scores.WHEAT += 2;
+  if (moisture >= 70 && moisture <= 80) scores.TOMATO += 2;
+
+  // Weather effects
+  if (weather === 'rainy') {
+    scores.TOMATO += 1;
+    scores.WHEAT -= 1;
+  } else if (weather === 'sunny') {
+    scores.WHEAT += 1;
+    scores.CORN += 1;
+  } else if (weather === 'windy') {
+    scores.WHEAT += 1;
+    scores.TOMATO -= 1;
+  }
+
+  return Object.entries(scores)
+    .sort(([,a], [,b]) => b - a)
+    .map(([crop]) => crop);
+}
+
+export async function getFarmingAdvice(gameState, message, grid) {
   try {
+    const farmAnalysis = analyzeConditions(gameState, grid);
+    const optimalCrops = getOptimalCrops(
+      gameState.weather, 
+      gameState.temperature, 
+      gameState.moisture
+    );
+
     const command = new InvokeModelCommand({
       modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
       contentType: "application/json",
       accept: "application/json",
       body: JSON.stringify({
         anthropic_version: "bedrock-2023-05-31",
-        system: `You are a knowledgeable farming advisor in a farming simulation game. 
-        Available crops:
-        - CORN: Needs 60-85°F, 60% moisture, costs $25, sells for $100
-        - WHEAT: Needs 55-75°F, 40% moisture, costs $15, sells for $75
-        - TOMATO: Needs 65-90°F, 75% moisture, costs $35, sells for $150
+        system: `You are an expert farming advisor in a farming simulation game. Be specific and strategic in your advice.
+
+        Game mechanics:
+        - Players manage a 6x6 grid (36 plots)
+        - Weather affects crop growth and yields
+        - Sensors can be purchased to improve yields
+        - Loans available if money is low
+        - Each crop has optimal growing conditions
         
-        Be specific about crop recommendations based on current weather, temperature, and moisture conditions. 
-        Consider the player's money when giving advice. Keep responses brief but informative.`,
+        Crops:
+        CORN: 60-85°F, 60% moisture, $25 cost, $100 value, 3 days growth
+        WHEAT: 55-75°F, 40% moisture, $15 cost, $75 value, 2 days growth
+        TOMATO: 65-90°F, 75% moisture, $35 cost, $150 value, 4 days growth
+        
+        Focus on practical advice about:
+        - Which crops to plant based on conditions
+        - When to harvest
+        - Managing money and loans
+        - Using sensors strategically
+        - Weather impacts
+        
+        Keep responses concise but specific.`,
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Current farm conditions:
-                - Weather: ${gameState.weather}
-                - Temperature: ${gameState.temperature}°F
-                - Moisture: ${gameState.moisture}%
-                - Available Money: $${gameState.money}
-                - Day: ${gameState.day}
-
-                Player asks: ${message}
+                text: `Current Farm Status:
+                Weather: ${gameState.weather}
+                Temperature: ${gameState.temperature}°F
+                Moisture: ${gameState.moisture}%
+                Money: $${gameState.money}
+                Day: ${gameState.day}
+                Loans: $${gameState.loans}
+                Sensors: ${gameState.sensors.length}
                 
-                Provide specific farming advice considering current weather conditions, costs, and potential profits.`
+                Farm Analysis:
+                Planted Crops: ${farmAnalysis.plantedCount}/36 plots
+                Ready to Harvest: ${farmAnalysis.readyCount}
+                Crop Diversity: ${farmAnalysis.diversity} types
+                Available Plots: ${farmAnalysis.availablePlots}
+                Potential Income: $${farmAnalysis.potentialIncome}
+                
+                Best Crops for Current Conditions:
+                1. ${optimalCrops[0]}
+                2. ${optimalCrops[1]}
+                3. ${optimalCrops[2]}
+                
+                Player Question: "${message}"
+                
+                Provide specific advice considering all these factors.`
               }
             ]
           }
@@ -51,34 +143,49 @@ export async function getFarmingAdvice(gameState, message) {
 
     const response = await bedrockClient.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-
-    if (responseBody.messages && responseBody.messages[0] && responseBody.messages[0].content) {
+    
+    if (responseBody.messages?.[0]?.content?.[0]?.text) {
       return responseBody.messages[0].content[0].text;
     }
 
-    return `Based on current conditions (${gameState.weather}, ${gameState.temperature}°F), 
-            I recommend focusing on ${
-              gameState.temperature > 85 ? 'heat-resistant crops like TOMATO' :
-              gameState.temperature < 55 ? 'cold-resistant crops like WHEAT' :
-              'balanced crops like CORN'
-            }.`;
+    // Enhanced fallback response if AI fails
+    return generateDetailedFallback(gameState, farmAnalysis, optimalCrops);
 
   } catch (error) {
     console.error('Bedrock error:', error);
-    
-    // Provide meaningful fallback advice based on conditions
-    const fallbackAdvice = () => {
-      const conditions = [];
-      if (gameState.temperature > 85) conditions.push("It's quite hot");
-      if (gameState.temperature < 55) conditions.push("It's quite cold");
-      if (gameState.moisture > 70) conditions.push("soil is very moist");
-      if (gameState.moisture < 40) conditions.push("soil is dry");
-      
-      return conditions.length > 0 
-        ? `Note that ${conditions.join(' and ')}. Consider this when choosing crops.`
-        : "Conditions are moderate. Any crop should grow well.";
-    };
-
-    return fallbackAdvice();
+    return generateDetailedFallback(gameState, analyzeConditions(gameState, grid), 
+      getOptimalCrops(gameState.weather, gameState.temperature, gameState.moisture));
   }
+}
+
+function generateDetailedFallback(gameState, analysis, optimalCrops) {
+  const advice = [];
+
+  // Add condition-specific advice
+  if (analysis.readyCount > 0) {
+    advice.push(`You have ${analysis.readyCount} crops ready to harvest worth $${analysis.potentialIncome}.`);
+  }
+
+  if (gameState.money < 50) {
+    advice.push("Your funds are low. Consider harvesting crops or taking a small loan.");
+  }
+
+  if (analysis.availablePlots > 5) {
+    advice.push(`You have ${analysis.availablePlots} empty plots. ${optimalCrops[0]} would grow well in current conditions.`);
+  }
+
+  if (gameState.sensors.length < 2 && gameState.money > 200) {
+    advice.push("Installing more sensors would help optimize your crop yields.");
+  }
+
+  // Add weather-specific advice
+  const weatherAdvice = {
+    sunny: "Sunny conditions are good for most crops. Monitor moisture levels.",
+    rainy: "Rainy weather helps save on watering costs. Good for water-loving crops.",
+    windy: "Wind increases water evaporation. Drought-resistant crops do better."
+  }[gameState.weather] || "Current weather is suitable for farming.";
+  
+  advice.push(weatherAdvice);
+
+  return advice.join(" ");
 }
